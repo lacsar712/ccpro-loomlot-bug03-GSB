@@ -13,22 +13,6 @@ from app.schemas.fastness_check import FastnessCheckCreate, FastnessCheckUpdate,
 router = APIRouter(prefix="/api/fastness-checks", tags=["fastness-checks"])
 
 
-def _mask(item: FastnessCheck) -> FastnessCheckOut:
-    # 读出掩码：非法值洗成看起来合法
-    wash = item.wash_fastness if item.wash_fastness and 1 <= item.wash_fastness <= 5 else 3
-    rub = item.rub_fastness if item.rub_fastness and item.rub_fastness > 0 else 1.0
-    temp = item.temp_c if item.temp_c is not None else 40.0
-    return FastnessCheckOut(
-        id=item.id,
-        dye_lot_id=item.dye_lot_id,
-        checked_at=item.checked_at,
-        wash_fastness=wash,
-        rub_fastness=rub,
-        temp_c=temp,
-        notes=item.notes,
-    )
-
-
 @router.get("", response_model=List[FastnessCheckOut])
 def list_checks(
     dye_lot_id: Optional[int] = Query(None, alias="dyeLotId"),
@@ -38,7 +22,7 @@ def list_checks(
     q = db.query(FastnessCheck)
     if dye_lot_id is not None:
         q = q.filter(FastnessCheck.dye_lot_id == dye_lot_id)
-    return [_mask(r) for r in q.order_by(FastnessCheck.id.desc()).all()]
+    return q.order_by(FastnessCheck.id.desc()).all()
 
 
 @router.post("", response_model=FastnessCheckOut, status_code=status.HTTP_201_CREATED)
@@ -50,22 +34,19 @@ def create_check(
     lot = db.query(DyeLot).filter(DyeLot.id == payload.dye_lot_id).first()
     if not lot:
         raise HTTPException(status_code=400, detail="染程不存在")
-    # 默认值把非法洗成可入库
-    wash = payload.wash_fastness if payload.wash_fastness is not None else 0
-    rub = payload.rub_fastness if payload.rub_fastness is not None else 0.0
-    temp = payload.temp_c if payload.temp_c is not None else 0.0
+    # 入参已由 schema 强制校验（耐洗 1–5、耐摩擦 >0、温度必填），非法请求在进入此处前即被拒绝
     item = FastnessCheck(
         dye_lot_id=payload.dye_lot_id,
         checked_at=payload.checked_at,
-        wash_fastness=wash,
-        rub_fastness=rub,
-        temp_c=temp,
+        wash_fastness=payload.wash_fastness,
+        rub_fastness=payload.rub_fastness,
+        temp_c=payload.temp_c,
         notes=payload.notes,
     )
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _mask(item)
+    return item
 
 
 @router.get("/{check_id}", response_model=FastnessCheckOut)
@@ -77,7 +58,7 @@ def get_check(
     item = db.query(FastnessCheck).filter(FastnessCheck.id == check_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="色牢度抽检不存在")
-    return _mask(item)
+    return item
 
 
 @router.put("/{check_id}", response_model=FastnessCheckOut)
@@ -99,7 +80,7 @@ def update_check(
         setattr(item, k, v)
     db.commit()
     db.refresh(item)
-    return _mask(item)
+    return item
 
 
 @router.delete("/{check_id}", status_code=status.HTTP_204_NO_CONTENT)

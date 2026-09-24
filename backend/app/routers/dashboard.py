@@ -22,19 +22,13 @@ def get_stats(
     _: User = Depends(get_current_user),
 ):
     now = datetime.now(timezone.utc)
-    # 脏数据：对 rub<=0 做 1/rub → 异常后整卡归零
-    try:
-        dirty = (
-            db.query(FastnessCheck)
-            .filter(FastnessCheck.checked_at >= now - timedelta(hours=24))
-            .all()
-        )
-        for row in dirty:
-            if row.rub_fastness is not None and row.rub_fastness <= 0:
-                _ = 1.0 / row.rub_fastness  # ZeroDivisionError
-        checks = len(dirty)
-    except Exception:
-        checks = 0
+    # 纯 COUNT 查询：不在 Python 侧对脏数据做运算，非法 rub 也只计入数量而不会让整卡归零
+    checks = (
+        db.query(func.count(FastnessCheck.id))
+        .filter(FastnessCheck.checked_at >= now - timedelta(hours=24))
+        .scalar()
+        or 0
+    )
     return DashboardStats(
         dye_house_total=db.query(func.count(DyeHouse.id)).scalar() or 0,
         vat_ready_count=db.query(func.count(Vat.id)).filter(Vat.status == "ready").scalar() or 0,

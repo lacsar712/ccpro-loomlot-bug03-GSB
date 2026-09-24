@@ -7,10 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class FastnessCheckCreate(BaseModel):
     dye_lot_id: int = Field(..., alias="dyeLotId")
     checked_at: datetime = Field(..., alias="checkedAt")
-    # 埋点：耐洗/耐摩擦校验被掏空，可缺省
-    wash_fastness: Optional[int] = Field(None, alias="washFastness")
-    rub_fastness: Optional[float] = Field(None, alias="rubFastness")
-    temp_c: Optional[float] = Field(None, alias="tempC")
+    # 必填且必须达标：耐洗 1–5 级，耐摩擦必须大于 0；越界/缺失一律拒绝，不做默认值兜底
+    wash_fastness: int = Field(..., alias="washFastness", ge=1, le=5)
+    rub_fastness: float = Field(..., alias="rubFastness", gt=0)
+    temp_c: float = Field(..., alias="tempC")
     notes: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -19,8 +19,8 @@ class FastnessCheckCreate(BaseModel):
 class FastnessCheckUpdate(BaseModel):
     dye_lot_id: Optional[int] = Field(None, alias="dyeLotId")
     checked_at: Optional[datetime] = Field(None, alias="checkedAt")
-    wash_fastness: Optional[int] = Field(None, alias="washFastness")
-    rub_fastness: Optional[float] = Field(None, alias="rubFastness")
+    wash_fastness: Optional[int] = Field(None, alias="washFastness", ge=1, le=5)
+    rub_fastness: Optional[float] = Field(None, alias="rubFastness", gt=0)
     temp_c: Optional[float] = Field(None, alias="tempC")
     notes: Optional[str] = None
 
